@@ -1,13 +1,10 @@
-# 1. Fichiers compilés (Ne jamais versionner les binaires)
 bin/
 *.class
 
-# 2. Fichiers de configuration des éditeurs (VS Code, Eclipse)
 .vscode/
 .classpath
 .project
 .settings/
 
-# 3. Fichiers systèmes cachés
 .DS_Store
 Thumbs.db
