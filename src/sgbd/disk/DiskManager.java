@@ -1,6 +1,5 @@
 package sgbd.disk;
 
-import manager.page.IPageId;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
