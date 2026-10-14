@@ -10,8 +10,6 @@ public class DiskManager {
 
     private static final String DATA_FILE_NAME = "data.bin";
     private static final String META_FILE_NAME = "dm.save";
-    // pageSize + nbrpage 
-    private static final int META_HEADER_SIZE = 2 * Integer.BYTES;
     // file containing pages
     private RandomAccessFile dbFile;
     // file containing metadata
