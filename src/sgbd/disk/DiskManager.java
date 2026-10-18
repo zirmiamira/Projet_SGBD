@@ -13,7 +13,7 @@ public class DiskManager implements IDiskManager {
     private RandomAccessFile dbFile;
     // file containing metadata
     private File metaFile;
-    private int nbrpage;
+    private int nbrPage;
     private int pageSize;
     private List<IPageId> availablePages;
     /**
@@ -57,7 +57,7 @@ public class DiskManager implements IDiskManager {
         // on crée un nouvel identifiant 
         else {
             ipid = new PageId(nbrpage);
-            nbrpage++;
+            nbrPage++;
         }
 
         return ipid;
@@ -98,13 +98,13 @@ public class DiskManager implements IDiskManager {
             throw new DiskManagerException("l'ID de la page est null");
         }
 
-        int pageNum = ((PageId) ipid).getPageId();
+        int pageNum = ((PageId) ipid).getIndex();
 
         if (pageNum == 0) {
             throw new DiskManagerException(" la Page 0  est réservée aux métadonnées");
         }
 
-        if (pageNum < 0 || pageNum >= nbrpage) {
+        if (pageNum < 0 || pageNum >= nbrPage) {
             throw new DiskManagerException("la page " + pageNum + " n'existe pas");
         }
 
@@ -120,13 +120,17 @@ availablePages.add(ipid);
      *
      * @return the count of active allocated pages.
      */
-    int GetActivePageCount();
+    int GetActivePageCount(){
+        return nbrPage-(avaiblePages.size());
+    }
 
     /**
      * Returns the configured page size in bytes managed by this disk manager.
      *
      * @return the page size in bytes.
      */
-    int GetPageSize();
+    int GetPageSize(){
+        return this.pageSize;
+    }
 
 }
