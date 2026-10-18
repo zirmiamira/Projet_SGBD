@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-public class DiskManager {
+public class DiskManager implements IDiskManager {
 
     private static final String DATA_FILE_NAME = "data.bin";
     private static final String META_FILE_NAME = "dm.save";
@@ -78,7 +78,27 @@ public class DiskManager {
      * @param ipid the identifier of the page to free.
      * @throws DiskManagerException
      */
-    void DeallocPage(IPageId ipid) throws DiskManagerException;
+    void DeallocPage(IPageId ipid) throws DiskManagerException{
+        if (ipid == null) {
+            throw new DiskManagerException("l'ID de la page est null");
+        }
+
+        int pageNum = ((PageId) ipid).getPageId();
+
+        if (pageNum == 0) {
+            throw new DiskManagerException(" la Page 0  est réservée aux métadonnées");
+        }
+
+        if (pageNum < 0 || pageNum >= nbrpage) {
+            throw new DiskManagerException("la page " + pageNum + " n'existe pas");
+        }
+
+        if (availablePages.contains(ipid)) {
+            throw new DiskManagerException("la page " + pageNum + " est déjà libre ");
+        }
+
+availablePages.add(ipid);
+    }
 
     /**
      * Returns the total number of pages currently in use (allocated and not yet deallocated).
