@@ -47,10 +47,25 @@ public class DiskManager implements IDiskManager {
      * @return the {@link IPageId} identifying the newly allocated page.
      * @throws DiskManagerException
      */
-    IPageId AllocPage() throws DiskManagerException;
+    IPageId AllocPage() throws DiskManagerException{
+        IPageId ipid;
+
+        //  Si une page est libre (dans la liste )
+        if (!availablePages.isEmpty()) {
+            ipid = availablePages.remove(0);
+        } 
+        // on crée un nouvel identifiant 
+        else {
+            ipid = new PageId(nbrpage);
+            nbrpage++;
+        }
+
+        return ipid;
+    }
 
     /**
-     * Reads the on-disk content of the page designated by {@code ipid}
+     * Reads the on-disk content of the page designated by {@code 
+     }
      * into the provided buffer.
      * <p>
      * Note: The caller is responsible for allocating and passing the destination buffer.
