@@ -23,7 +23,7 @@ public class DiskManager implements IDiskManager {
      *
      */
     public DiskManager(){
-        this.nbrpage = 0;
+        this.nbrPage = 0;
         this.availablePages = new ArrayList<>();
     }
    
