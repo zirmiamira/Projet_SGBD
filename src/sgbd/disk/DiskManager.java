@@ -2,8 +2,10 @@ package sgbd.disk;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.List;
 
 public class DiskManager implements IDiskManager {
 
