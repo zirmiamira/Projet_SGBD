@@ -1,4 +1,3 @@
-package sgbd.disk;
 /**
  * Interface representing a unique identifier for a disk storage page
  * in the database management system.
@@ -20,4 +19,14 @@ public interface IPageId {
      */
     @Override
     boolean equals(Object obj);
+    
+    /**
+     * Returns a hash code value for this page identifier.
+     * <p>
+     * Must be consistent with the definition of {@link #equals(Object)}.
+     *
+     * @return a hash code value for this page identifier.
+     */
+    @Override
+    int hashCode();
 }
