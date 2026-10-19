@@ -53,7 +53,6 @@ public class DiskManager implements IDiskManager {
          File[] files = directory.listFiles();
          
          if (files == null) {
-        	 resetState();
              throw new DiskManagerException( "Impossible de lire le contenu du dossier." );
          }
          boolean nouveauStockage = files.length == 0 || (!dataFile.exists() && !meta.exists());
@@ -63,12 +62,10 @@ public class DiskManager implements IDiskManager {
                  meta.createNewFile();
                  // verifier si les 2 fichiers sont crees
                  if (!dataFile.isFile() || !meta.isFile()) {
-                	 	resetState();
                 	    throw new DiskManagerException("Impossible de créer les fichiers du DiskManager.");
                 	}
                  
              } else if (!dataFile.isFile() || !meta.isFile()) {
-            	 resetState();
                  throw new DiskManagerException( "Les fichiers du DiskManager sont incomplets.");
              }
              // Initialisation les attributs 
