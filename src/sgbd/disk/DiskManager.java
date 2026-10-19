@@ -217,25 +217,89 @@ public class DiskManager implements IDiskManager {
      * @param buffer the buffer into which data will be copied
      * @throws DiskManagerException
      */
-    public void ReadPage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException;
+    @Override
+    public void ReadPage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException {
+        if (dejaInitialise == false) {
+            throw new DiskManagerException("Le DiskManager n'est pas initialisé. Appelez Init() en premier.");
+        }
 
-    /**
-     * Writes the content of the provided buffer into the page designated by {@code ipid}.
-     * This is the counterpart of {@link #ReadPage(IPageId, ByteBuffer)}.
-     *
-     * @param ipid   the identifier of the target page.
-     * @param buffer the buffer containing the data to write.
-     * @throws DiskManagerException
-     */
-    public void WritePage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException;
+        int pageIndex = ((PageId) ipid).getIndex();
 
-    /**
-     * Deallocates the page identified by {@code ipid}, marking it as available
-     * for future allocations.
-     *
-     * @param ipid the identifier of the page to free.
-     * @throws DiskManagerException
-     */
+        if (pageIndex < 0) {
+            throw new DiskManagerException(
+                    "L'ID de la page est négatif (" + pageIndex + ") ce qui est impossible.");
+        }
+
+        if (pageIndex >= nbrPage) {
+            throw new DiskManagerException("Tentative d'accès à la page " + pageIndex
+                    + " qui dépasse la limite du fichier (nbrPage = " + nbrPage + ").");
+        }
+
+        if (availablePages.contains(ipid)) {
+            throw new DiskManagerException(
+                    "La page " + pageIndex + " est actuellement désallouée et ne peut pas être manipulée.");
+        }
+
+        File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
+
+        try (RandomAccessFile raf = new RandomAccessFile(dataFile, "r")) {
+            raf.seek((long) pageIndex * pageSize);
+            byte[] data = new byte[pageSize];
+            raf.readFully(data);
+            buffer.clear();
+            buffer.put(data);
+        } catch (FileNotFoundException e) {
+            throw new DiskManagerException(
+                    "Fichier introuvable ou accès en lecture refusé lors de la lecture de la page "
+                            + pageIndex,
+                    e);
+        } catch (EOFException e) {
+            throw new DiskManagerException(
+                    "La page " + pageIndex + " n'a pas pu être lue en entier", e);
+        } catch (IOException e) {
+            throw new DiskManagerException(
+                    "Erreur matérielle de lecture de la page " + pageIndex + " : " + e, e);
+        }
+    }
+
+    @Override
+    public void WritePage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException {
+        if (dejaInitialise == false) {
+            throw new DiskManagerException("Le DiskManager n'est pas initialisé. Appelez Init() en premier.");
+        }
+
+        int pageIndex = ((PageId) ipid).getIndex();
+
+        if (pageIndex < 0) {
+            throw new DiskManagerException("L'ID de la page est négatif (" + pageIndex + ").");
+        }    
+
+        if (pageIndex >= nbrPage) {
+            throw new DiskManagerException(
+                    "La page " + pageIndex + " n'a jamais été créée (limite actuelle : " + nbrPage + ").");
+        }    
+
+        if (availablePages.contains(ipid)) {
+            throw new DiskManagerException(
+                    "La page " + pageIndex + " a déjà été désallouée");
+        }
+
+        File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
+
+        try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
+            raf.seek((long) pageIndex * pageSize);
+            buffer.rewind();
+            byte[] data = new byte[pageSize];
+            buffer.get(data);
+            raf.write(data);
+        } catch (FileNotFoundException e) {
+            throw new DiskManagerException(
+                    "Fichier introuvable ou accès en écriture refusé pour la page " + pageIndex, e);
+        } catch (IOException e) {
+            throw new DiskManagerException(
+                    "Erreur matérielle lors de l'écriture de la page " + pageIndex + " sur le disque dur.", e);
+        }
+    }
     public void DeallocPage(IPageId ipid) throws DiskManagerException{
         if (ipid == null) {
             throw new DiskManagerException("l'ID de la page est null");
