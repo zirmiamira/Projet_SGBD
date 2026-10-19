@@ -25,22 +25,159 @@ public class DiskManager implements IDiskManager {
         this.availablePages = new ArrayList<>();
     }
    
-    /**
+        /**
      * Initializes the disk manager with a target working directory and a page size.
      *
      * @param dmDir    the absolute path to a valid working directory.
      * @param pageSize the size of a single page in bytes.
      * @throws DiskManagerException 
      */
-    void Init(String dmDir, int pageSize) throws DiskManagerException;
+    public void Init(String dmDir, int pageSize) throws DiskManagerException{
+    	if(dejaInitialise) {
+    		throw new DiskManagerException("L'initialisation a déjà été effectuée : la méthode Init() ne peut pas être appelée une seconde fois.");
+    	}
+    	 checkArgumentsValidity(dmDir, pageSize);
+    	 // reset attributs to avoid any confusion
+    	 resetState();
+    	
+    	 File directory = new File(dmDir);
+         File dataFile = new File(directory, DATA_FILE_NAME);
+         File meta = new File(directory, META_FILE_NAME);
+         
+         File[] files = directory.listFiles();
+         
+         if (files == null) {
+             throw new DiskManagerException( "Impossible de lire le contenu du dossier." );
+         }
+         boolean nouveauStockage = files.length == 0 || (!dataFile.exists() && !meta.exists());
+         try {
+             if (nouveauStockage) {
+                 dataFile.createNewFile();
+                 meta.createNewFile();
+                 // verifier si les 2 fichiers sont crees
+                 if (!dataFile.isFile() || !meta.isFile()) {
+                	    throw new DiskManagerException("Impossible de créer les fichiers du DiskManager.");
+                	}
+                 
+             } else if (!dataFile.isFile() || !meta.isFile()) {
+                 throw new DiskManagerException( "Les fichiers du DiskManager sont incomplets.");
+             }
+             // Initialisation les attributs 
+             this.metaFile = meta;
+             if (nouveauStockage) {
+                 this.pageSize = pageSize;
+                 saveMetadata();
+             } else {
+                 loadMetadata();
+                 if (this.pageSize != pageSize) {
+                     throw new DiskManagerException( "La taille de page fournie ne correspond pas à celle enregistrée dans les métadonnées." );
+                 }
+             }
+             this.dejaInitialise = true;
+         } catch (IOException e) {
+             throw new DiskManagerException("Erreur lors de l'initialisation du DiskManager.", e);
+         }
+     }
 
+    /**
+     * Verifier si les arguments sont bons 
+     */
+    private void checkArgumentsValidity(String dmDir, int pageSize) throws DiskManagerException{
+        if (dmDir == null || dmDir.isBlank()) {
+        	throw new DiskManagerException("Le chemin du dossier ne peut pas être vide.");
+        }
+        if (pageSize <= 0) {
+        	throw new DiskManagerException("La taille d'une page doit être strictement positive.");
+            
+        }
+        File directory = new File(dmDir);
+        if (!directory.exists()) {
+        	throw new DiskManagerException("Le dossier n'existe pas : " + dmDir);
+        }
+        if (!directory.isDirectory()) {
+        	throw new DiskManagerException("Le chemin fourni n'est pas un dossier : " + dmDir);
+        }
+        
+    }
+    
+    /**
+     * Charger les métadonnées
+     */
+    private void loadMetadata() throws DiskManagerException {
+        try {
+            int size = (int) metaFile.length();
+            byte[] bytes = new byte[size];
+
+            try (FileInputStream in = new FileInputStream(metaFile)) {
+                in.read(bytes);
+            }
+            ByteBuffer buffer = ByteBuffer.wrap(bytes);
+            nbrpage = buffer.getInt();
+            // a chaque fois on verifie si les donnees chargees sont coherentes
+            if (nbrpage < 0) {
+                throw new DiskManagerException("Le nombre de pages ne peut pas être négatif.");
+            }
+            pageSize = buffer.getInt();
+            if (pageSize <= 0) {
+                throw new DiskManagerException("La taille d'une page doit être strictement positive.");
+            }
+            availablePages = new ArrayList<>();
+            while (buffer.hasRemaining()) {
+                int index = buffer.getInt();
+                if (index < 0 || index >= nbrpage) {
+                    throw new DiskManagerException("Un numéro de page ne peut pas être négatif.");
+                }
+                availablePages.add(new PageId(index));
+            }
+        } catch (IOException e) {
+            throw new DiskManagerException( "Erreur lors du chargement des métadonnées : " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Enregistrer les métadonnées
+     */
+    private void saveMetadata() throws DiskManagerException {
+        if (nbrpage < 0) {
+            throw new DiskManagerException( "Le nombre de pages ne peut pas être négatif.");
+        }
+        if (pageSize <= 0) {
+            throw new DiskManagerException("La taille d'une page doit être strictement positive." );
+        }
+        int size = (2 + availablePages.size()) * Integer.BYTES;
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+
+        buffer.putInt(nbrpage);
+        buffer.putInt(pageSize);
+
+        for (IPageId pageId : availablePages) {
+            PageId p = (PageId) pageId;
+            int index = (int) p.getIndex();
+
+            if (index < 0 || index >= nbrpage) {
+                throw new DiskManagerException("Identifiant de page invalide : " + index);
+            }
+            buffer.putInt((int) p.getIndex());
+        }
+
+        try (FileOutputStream out = new FileOutputStream(metaFile)) {
+            out.write(buffer.array());
+        } catch (IOException e) {
+            throw new DiskManagerException("Erreur lors de l'écriture des métadonnées : " + e.getMessage());
+        }
+    }
     /**
      * Persists the current state and metadata of the disk manager
      * to the working directory.
      *
      * @throws DiskManagerException
      */
-    void Save() throws DiskManagerException;
+    void Save() throws DiskManagerException {
+        if (!dejaInitialise) {
+            throw new DiskManagerException( "Le DiskManager doit être initialisé avant de sauvegarder." );
+        }
+        saveMetadata();
+    }
 
     /**
      * Allocates a new page requested by the upper layers of the DBMS.
