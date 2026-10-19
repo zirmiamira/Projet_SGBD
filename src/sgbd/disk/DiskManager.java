@@ -260,7 +260,7 @@ availablePages.add(ipid);
      * @return the count of active allocated pages.
      */
     int GetActivePageCount(){
-        return nbrPage-(avaiblePages.size());
+        return nbrPage-(availablePages.size());
     }
 
     /**
