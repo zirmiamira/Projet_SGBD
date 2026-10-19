@@ -114,9 +114,9 @@ public class DiskManager implements IDiskManager {
                 in.read(bytes);
             }
             ByteBuffer buffer = ByteBuffer.wrap(bytes);
-            nbrpage = buffer.getInt();
+            nbrPage = buffer.getInt();
             // a chaque fois on verifie si les donnees chargees sont coherentes
-            if (nbrpage < 0) {
+            if (nbrPage < 0) {
                 throw new DiskManagerException("Le nombre de pages ne peut pas être négatif.");
             }
             pageSize = buffer.getInt();
@@ -126,7 +126,7 @@ public class DiskManager implements IDiskManager {
             availablePages = new ArrayList<>();
             while (buffer.hasRemaining()) {
                 int index = buffer.getInt();
-                if (index < 0 || index >= nbrpage) {
+                if (index < 0 || index >= nbrPage) {
                     throw new DiskManagerException("Un numéro de page ne peut pas être négatif.");
                 }
                 availablePages.add(new PageId(index));
@@ -140,7 +140,7 @@ public class DiskManager implements IDiskManager {
      * Enregistrer les métadonnées
      */
     private void saveMetadata() throws DiskManagerException {
-        if (nbrpage < 0) {
+        if (nbrPage < 0) {
             throw new DiskManagerException( "Le nombre de pages ne peut pas être négatif.");
         }
         if (pageSize <= 0) {
@@ -149,14 +149,14 @@ public class DiskManager implements IDiskManager {
         int size = (2 + availablePages.size()) * Integer.BYTES;
         ByteBuffer buffer = ByteBuffer.allocate(size);
 
-        buffer.putInt(nbrpage);
+        buffer.putInt(nbrPage);
         buffer.putInt(pageSize);
 
         for (IPageId pageId : availablePages) {
             PageId p = (PageId) pageId;
             int index = (int) p.getIndex();
 
-            if (index < 0 || index >= nbrpage) {
+            if (index < 0 || index >= nbrPage) {
                 throw new DiskManagerException("Identifiant de page invalide : " + index);
             }
             buffer.putInt((int) p.getIndex());
@@ -195,7 +195,7 @@ public class DiskManager implements IDiskManager {
         } 
         // on crée un nouvel identifiant 
         else {
-            ipid = new PageId(nbrpage);
+            ipid = new PageId(nbrPage);
             nbrPage++;
         }
 
@@ -285,7 +285,7 @@ availablePages.add(ipid);
         } finally {
             dbFile = null;
             metaFile = null;
-            nbrpage = 0;
+            nbrPage = 0;
             pageSize = 0;
             availablePages = new ArrayList<>();
         }
