@@ -16,6 +16,8 @@ public class DiskManager implements IDiskManager {
     private int nbrPage;
     private int pageSize;
     private List<IPageId> availablePages;
+    // Indique si la méthode Init() a déjà été appelée.
+    private boolean dejaInitialise = false;
     /**
      * The Constructor
      *
