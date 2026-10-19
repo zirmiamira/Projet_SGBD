@@ -53,6 +53,7 @@ public class DiskManager implements IDiskManager {
          File[] files = directory.listFiles();
          
          if (files == null) {
+        	 resetState();
              throw new DiskManagerException( "Impossible de lire le contenu du dossier." );
          }
          boolean nouveauStockage = files.length == 0 || (!dataFile.exists() && !meta.exists());
@@ -62,10 +63,12 @@ public class DiskManager implements IDiskManager {
                  meta.createNewFile();
                  // verifier si les 2 fichiers sont crees
                  if (!dataFile.isFile() || !meta.isFile()) {
+                	 	resetState();
                 	    throw new DiskManagerException("Impossible de créer les fichiers du DiskManager.");
                 	}
                  
              } else if (!dataFile.isFile() || !meta.isFile()) {
+            	 resetState();
                  throw new DiskManagerException( "Les fichiers du DiskManager sont incomplets.");
              }
              // Initialisation les attributs 
@@ -76,11 +79,13 @@ public class DiskManager implements IDiskManager {
              } else {
                  loadMetadata();
                  if (this.pageSize != pageSize) {
+                	 resetState();
                      throw new DiskManagerException( "La taille de page fournie ne correspond pas à celle enregistrée dans les métadonnées." );
                  }
              }
              this.dejaInitialise = true;
          } catch (IOException e) {
+        	 resetState();
              throw new DiskManagerException("Erreur lors de l'initialisation du DiskManager.", e);
          }
      }
@@ -109,28 +114,38 @@ public class DiskManager implements IDiskManager {
     /**
      * Charger les métadonnées
      */
-    private void loadMetadata() throws DiskManagerException {
+        private void loadMetadata() throws DiskManagerException {
         try {
-            int size = (int) metaFile.length();
-            byte[] bytes = new byte[size];
-
-            try (FileInputStream in = new FileInputStream(metaFile)) {
-                in.read(bytes);
-            }
-            ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        	// Lire le fichier complet
+	        byte[] bytes = Files.readAllBytes(metaFile.toPath());
+	
+	        // Il faut au minimum 2 entiers (nbrPage et pageSize)
+	        if (bytes.length < 2 * Integer.BYTES) {
+	            throw new DiskManagerException("Fichier de métadonnées trop court.");
+	        }
+	        // Après les 8 premiers octets, chaque index doit occuper exactement 4 octets vu que c'est un int
+	        int remainingBytes = bytes.length - 2 * Integer.BYTES;
+	        if (remainingBytes % Integer.BYTES != 0) {
+	            throw new DiskManagerException("Fichier de métadonnées tronqué : un index de page est incomplet.");
+	        }
+	        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+	        
             nbrPage = buffer.getInt();
             // a chaque fois on verifie si les donnees chargees sont coherentes
             if (nbrPage < 0) {
+            	 nbrPage=0;
                 throw new DiskManagerException("Le nombre de pages ne peut pas être négatif.");
             }
             pageSize = buffer.getInt();
             if (pageSize <= 0) {
+            	pageSize=0;
                 throw new DiskManagerException("La taille d'une page doit être strictement positive.");
             }
             availablePages = new ArrayList<>();
             while (buffer.hasRemaining()) {
                 int index = buffer.getInt();
                 if (index < 0 || index >= nbrPage) {
+                	availablePages= null;
                     throw new DiskManagerException("Un numéro de page ne peut pas être négatif.");
                 }
                 availablePages.add(new PageId(index));
@@ -184,7 +199,6 @@ public class DiskManager implements IDiskManager {
         }
         saveMetadata();
     }
-
     /**
      * Allocates a new page requested by the upper layers of the DBMS.
      * @return the {@link IPageId} identifying the newly allocated page.
@@ -205,7 +219,6 @@ public class DiskManager implements IDiskManager {
 
         return ipid;
     }
-
     /**
      * Reads the on-disk content of the page designated by {@code 
      }
@@ -328,7 +341,7 @@ availablePages.add(ipid);
      * @return the count of active allocated pages.
      */
     public int GetActivePageCount(){
-        return this.nbrPage-(this.availablePages.size());
+        return nbrPage-(availablePages.size());
     }
 
     /**
@@ -338,6 +351,20 @@ availablePages.add(ipid);
      */
     public int GetPageSize(){
         return this.pageSize;
+    }
+    /**
+     * Returns information about the actual DiskManager
+     *
+     * @return string containing infos
+     */
+     @Override
+    public String toString() {
+        if (!dejaInitialise) {
+            return "DiskManager{non initialisé}";
+        }
+        return "DiskManager{pageSize=" + pageSize
+                + ", nbrpage=" + nbrPage
+                + ", pagesLibres=" + availablePages + "}";
     }
 
     /**
@@ -355,6 +382,7 @@ availablePages.add(ipid);
             metaFile = null;
             nbrPage = 0;
             pageSize = 0;
+            dejaInitialise=false;
             availablePages = new ArrayList<>();
         }
     }
