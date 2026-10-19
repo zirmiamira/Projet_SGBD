@@ -270,4 +270,22 @@ availablePages.add(ipid);
         return this.pageSize;
     }
 
+        /**
+     * Réinitialise l'état interne du DiskManager avant son initialisation.
+     */
+    private void resetState() throws DiskManagerException {
+        try {
+            if (dbFile != null) {
+                dbFile.close();
+            }
+        } catch (IOException e) {
+            throw new DiskManagerException("Impossible de fermer le fichier de données lors de la réinitialisation.");
+        } finally {
+            dbFile = null;
+            metaFile = null;
+            nbrpage = 0;
+            pageSize = 0;
+            availablePages = new ArrayList<>();
+        }
+    }
 }
