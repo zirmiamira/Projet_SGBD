@@ -259,7 +259,7 @@ availablePages.add(ipid);
      *
      * @return the count of active allocated pages.
      */
-    int GetActivePageCount(){
+    public int GetActivePageCount(){
         return this.nbrPage-(this.availablePages.size());
     }
 
@@ -268,7 +268,7 @@ availablePages.add(ipid);
      *
      * @return the page size in bytes.
      */
-    int GetPageSize(){
+    public int GetPageSize(){
         return this.pageSize;
     }
 
