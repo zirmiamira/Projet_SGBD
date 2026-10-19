@@ -25,7 +25,7 @@ public class DiskManager implements IDiskManager {
         this.availablePages = new ArrayList<>();
     }
    
-        /**
+    /**
      * Initializes the disk manager with a target working directory and a page size.
      *
      * @param dmDir    the absolute path to a valid working directory.
