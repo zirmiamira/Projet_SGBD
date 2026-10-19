@@ -1,6 +1,8 @@
 package sgbd.disk;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -176,7 +178,7 @@ public class DiskManager implements IDiskManager {
      *
      * @throws DiskManagerException
      */
-    void Save() throws DiskManagerException {
+    public void Save() throws DiskManagerException {
         if (!dejaInitialise) {
             throw new DiskManagerException( "Le DiskManager doit être initialisé avant de sauvegarder." );
         }
@@ -188,7 +190,7 @@ public class DiskManager implements IDiskManager {
      * @return the {@link IPageId} identifying the newly allocated page.
      * @throws DiskManagerException
      */
-    IPageId AllocPage() throws DiskManagerException{
+    public IPageId AllocPage() throws DiskManagerException{
         IPageId ipid;
 
         //  Si une page est libre (dans la liste )
@@ -215,7 +217,7 @@ public class DiskManager implements IDiskManager {
      * @param buffer the buffer into which data will be copied
      * @throws DiskManagerException
      */
-    void ReadPage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException;
+    public void ReadPage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException;
 
     /**
      * Writes the content of the provided buffer into the page designated by {@code ipid}.
@@ -225,7 +227,7 @@ public class DiskManager implements IDiskManager {
      * @param buffer the buffer containing the data to write.
      * @throws DiskManagerException
      */
-    void WritePage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException;
+    public void WritePage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException;
 
     /**
      * Deallocates the page identified by {@code ipid}, marking it as available
@@ -234,7 +236,7 @@ public class DiskManager implements IDiskManager {
      * @param ipid the identifier of the page to free.
      * @throws DiskManagerException
      */
-    void DeallocPage(IPageId ipid) throws DiskManagerException{
+    public void DeallocPage(IPageId ipid) throws DiskManagerException{
         if (ipid == null) {
             throw new DiskManagerException("l'ID de la page est null");
         }
