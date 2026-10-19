@@ -270,7 +270,7 @@ availablePages.add(ipid);
         return this.pageSize;
     }
 
-        /**
+    /**
      * Réinitialise l'état interne du DiskManager avant son initialisation.
      */
     private void resetState() throws DiskManagerException {
