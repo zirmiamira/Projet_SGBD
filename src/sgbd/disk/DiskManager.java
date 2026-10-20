@@ -1,11 +1,13 @@
 package sgbd.disk;
 
+import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,8 +22,9 @@ public class DiskManager implements IDiskManager {
     private int nbrPage;
     private int pageSize;
     private List<IPageId> availablePages;
-    // Indique si la méthode Init() a déjà été appelée.
-    private boolean dejaInitialise = false;
+    // check if init() is initilazed
+    private boolean isInitialized = false;
+	
     /**
      * The Constructor
      *
@@ -39,7 +42,7 @@ public class DiskManager implements IDiskManager {
      * @throws DiskManagerException 
      */
     public void Init(String dmDir, int pageSize) throws DiskManagerException{
-    	if(dejaInitialise) {
+    	if(isInitialized) {
     		throw new DiskManagerException("L'initialisation a déjà été effectuée : la méthode Init() ne peut pas être appelée une seconde fois.");
     	}
     	 checkArgumentsValidity(dmDir, pageSize);
@@ -80,7 +83,7 @@ public class DiskManager implements IDiskManager {
                      throw new DiskManagerException( "La taille de page fournie ne correspond pas à celle enregistrée dans les métadonnées." );
                  }
              }
-             this.dejaInitialise = true;
+             this.isInitialized = true;
          } catch (IOException e) {
         	 resetState();
              throw new DiskManagerException("Erreur lors de l'initialisation du DiskManager.", e);
@@ -88,7 +91,7 @@ public class DiskManager implements IDiskManager {
      }
 
     /**
-     * Verifier si les arguments sont bons 
+     * check if the arguments are correct
      */
     private void checkArgumentsValidity(String dmDir, int pageSize) throws DiskManagerException{
         if (dmDir == null || dmDir.isBlank()) {
@@ -109,7 +112,7 @@ public class DiskManager implements IDiskManager {
     }
     
     /**
-     * Charger les métadonnées
+     * Charge metadata
      */
         private void loadMetadata() throws DiskManagerException {
         try {
@@ -153,7 +156,7 @@ public class DiskManager implements IDiskManager {
     }
     
     /**
-     * Enregistrer les métadonnées
+     * save metadata
      */
     private void saveMetadata() throws DiskManagerException {
         if (nbrPage < 0) {
@@ -184,6 +187,7 @@ public class DiskManager implements IDiskManager {
             throw new DiskManagerException("Erreur lors de l'écriture des métadonnées : " + e.getMessage());
         }
     }
+	
     /**
      * Persists the current state and metadata of the disk manager
      * to the working directory.
@@ -191,11 +195,12 @@ public class DiskManager implements IDiskManager {
      * @throws DiskManagerException
      */
     public void Save() throws DiskManagerException {
-        if (!dejaInitialise) {
+        if (!isInitialized) {
             throw new DiskManagerException( "Le DiskManager doit être initialisé avant de sauvegarder." );
         }
         saveMetadata();
     }
+	
     /**
      * Allocates a new page requested by the upper layers of the DBMS.
      * @return the {@link IPageId} identifying the newly allocated page.
@@ -203,12 +208,9 @@ public class DiskManager implements IDiskManager {
      */
     public IPageId AllocPage() throws DiskManagerException{
         IPageId ipid;
-		  if (!dejaInitialise) {
+		  if (!isInitialized) {
             throw new DiskManagerException( "Le DiskManager doit être initialisé.");
         }
-
-
-
         //  Si une page est libre (dans la liste )
         if (!availablePages.isEmpty()) {
             ipid = availablePages.remove(0);
@@ -218,7 +220,7 @@ public class DiskManager implements IDiskManager {
             ipid = new PageId(nbrPage);
             nbrPage++;
         }
-
+		Save();
         return ipid;
     }
     /**
@@ -234,7 +236,7 @@ public class DiskManager implements IDiskManager {
      */
     @Override
     public void ReadPage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException {
-        if (dejaInitialise == false) {
+        if (isInitialized == false) {
             throw new DiskManagerException("Le DiskManager n'est pas initialisé. Appelez Init() en premier.");
         }
 
@@ -278,8 +280,16 @@ public class DiskManager implements IDiskManager {
     }
 
     @Override
+	/**
+     * Writes the content of the provided buffer into the page designated by {@code ipid}.
+     * This is the counterpart of {@link #ReadPage(IPageId, ByteBuffer)}.
+     *
+     * @param ipid   the identifier of the target page.
+     * @param buffer the buffer containing the data to write.
+     * @throws DiskManagerException
+     */
     public void WritePage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException {
-        if (dejaInitialise == false) {
+        if (isInitialized == false) {
             throw new DiskManagerException("Le DiskManager n'est pas initialisé. Appelez Init() en premier.");
         }
 
@@ -315,12 +325,17 @@ public class DiskManager implements IDiskManager {
                     "Erreur matérielle lors de l'écriture de la page " + pageIndex + " sur le disque dur.", e);
         }
     }
+	/**
+     * Deallocates the page identified by {@code ipid}, marking it as available
+     * for future allocations.
+     *
+     * @param ipid the identifier of the page to free.
+     * @throws DiskManagerException
+     */
     public void DeallocPage(IPageId ipid) throws DiskManagerException{
-		  if (!dejaInitialise) {
+		if (!isInitialized) {
             throw new DiskManagerException( "Le DiskManager doit être initialisé.");
         }
-
-
         if (ipid == null) {
             throw new DiskManagerException("l'ID de la page est null");
         }
@@ -335,7 +350,8 @@ public class DiskManager implements IDiskManager {
             throw new DiskManagerException("la page " + pageNum + " est déjà libre ");
         }
 
-availablePages.add(ipid);
+		availablePages.add(ipid);
+		Save();
     }
 
     /**
@@ -362,12 +378,10 @@ availablePages.add(ipid);
      */
      @Override
     public String toString() {
-        if (!dejaInitialise) {
+        if (!isInitialized) {
             return "DiskManager{non initialisé}";
         }
-        return "DiskManager{pageSize=" + pageSize
-                + ", nbrpage=" + nbrPage
-                + ", pagesLibres=" + availablePages + "}";
+        return "DiskManager{pageSize=" + pageSize+ ", nbrpage=" + nbrPage + ", pagesLibres=" + availablePages + "}";
     }
 
     /**
@@ -385,7 +399,7 @@ availablePages.add(ipid);
             metaFile = null;
             nbrPage = 0;
             pageSize = 0;
-            dejaInitialise=false;
+            isInitialized=false;
             availablePages = new ArrayList<>();
         }
     }
