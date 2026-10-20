@@ -203,6 +203,11 @@ public class DiskManager implements IDiskManager {
      */
     public IPageId AllocPage() throws DiskManagerException{
         IPageId ipid;
+		  if (!dejaInitialise) {
+            throw new DiskManagerException( "Le DiskManager doit être initialisé.");
+        }
+
+
 
         //  Si une page est libre (dans la liste )
         if (!availablePages.isEmpty()) {
@@ -311,15 +316,16 @@ public class DiskManager implements IDiskManager {
         }
     }
     public void DeallocPage(IPageId ipid) throws DiskManagerException{
+		  if (!dejaInitialise) {
+            throw new DiskManagerException( "Le DiskManager doit être initialisé.");
+        }
+
+
         if (ipid == null) {
             throw new DiskManagerException("l'ID de la page est null");
         }
 
         int pageNum = ((PageId) ipid).getIndex();
-
-        if (pageNum == 0) {
-            throw new DiskManagerException(" la Page 0  est réservée aux métadonnées");
-        }
 
         if (pageNum < 0 || pageNum >= nbrPage) {
             throw new DiskManagerException("la page " + pageNum + " n'existe pas");
