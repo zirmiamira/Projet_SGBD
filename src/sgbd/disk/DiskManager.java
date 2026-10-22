@@ -216,23 +216,47 @@ public class DiskManager implements IDiskManager {
      * @return the {@link IPageId} identifying the newly allocated page.
      * @throws DiskManagerException
      */
-    public IPageId AllocPage() throws DiskManagerException{
-        IPageId ipid;
-		  if (!isInitialized) {
-            throw new DiskManagerException( "Le DiskManager doit être initialisé.");
-        }
-        //  Si une page est libre (dans la liste )
-        if (!availablePages.isEmpty()) {
-            ipid = availablePages.remove(0);
-        } 
-        // on crée un nouvel identifiant 
-        else {
-            ipid = new PageId(nbrPage);
-            nbrPage++;
-        }
-		Save();
-        return ipid;
-    }
+        /**
+     * Allocates a new page requested by the upper layers of the DBMS.
+     * @return the {@link IPageId} identifying the newly allocated page.
+     * @throws DiskManagerException
+     */
+		public IPageId AllocPage() throws DiskManagerException {
+		    if (!isInitialized) {
+		        throw new DiskManagerException(
+		            "Le DiskManager doit être initialisé."
+		        );
+		    }
+		
+		    IPageId ipid;
+		
+		    try {
+		        File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
+		        try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
+		            if (!availablePages.isEmpty()) {
+		                // Réutiliser une page déjà libérée
+		                ipid = availablePages.remove(0);
+		            } else {
+		                // Allouer une nouvelle page
+		                ipid = new PageId(nbrPage);
+		                nbrPage++;
+		            }
+		            // Réserver physiquement l'espace pour toutes les pages
+		            long requiredLength = (long) nbrPage * pageSize;
+		            if (raf.length() < requiredLength) {
+		                raf.setLength(requiredLength);
+		            }
+		        }
+		
+		        Save();
+		        return ipid;
+		
+		    } catch (IOException e) {
+		        throw new DiskManagerException(
+		            "Erreur lors de l'allocation de la page.", e
+		        );
+		    }
+		}
     /**
      * Reads the on-disk content of the page designated by {@code 
      }
