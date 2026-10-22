@@ -79,15 +79,17 @@ public class DiskManager implements IDiskManager {
              } else {
                  loadMetadata();
                  if (this.pageSize != pageSize) {
-                	 resetState();
                      throw new DiskManagerException( "La taille de page fournie ne correspond pas à celle enregistrée dans les métadonnées." );
                  }
              }
              this.isInitialized = true;
-         } catch (IOException e) {
-        	 resetState();
-             throw new DiskManagerException("Erreur lors de l'initialisation du DiskManager.", e);
-         }
+          } catch (DiskManagerException e) {
+        	    resetState();
+        	    throw e;
+        	} catch (IOException e) {
+        	    resetState();
+        	    throw new DiskManagerException("Erreur lors de l'initialisation du DiskManager.", e);
+        	}
      }
 
     /**
@@ -146,12 +148,16 @@ public class DiskManager implements IDiskManager {
                 int index = buffer.getInt();
                 if (index < 0 || index >= nbrPage) {
                 	availablePages= null;
-                    throw new DiskManagerException("Un numéro de page ne peut pas être négatif.");
+                    throw new DiskManagerException(" Index de page libre invalide : "+ index);
                 }
                 availablePages.add(new PageId(index));
             }
+        } catch (DiskManagerException e) {
+            throw e;
         } catch (IOException e) {
-            throw new DiskManagerException( "Erreur lors du chargement des métadonnées : " + e.getMessage());
+            throw new DiskManagerException(
+                "Erreur lors de la lecture des métadonnées.", e
+            );
         }
     }
     
@@ -183,7 +189,7 @@ public class DiskManager implements IDiskManager {
 
         try (FileOutputStream out = new FileOutputStream(metaFile)) {
             out.write(buffer.array());
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new DiskManagerException("Erreur lors de l'écriture des métadonnées : " + e.getMessage());
         }
     }
@@ -198,7 +204,11 @@ public class DiskManager implements IDiskManager {
         if (!isInitialized) {
             throw new DiskManagerException( "Le DiskManager doit être initialisé avant de sauvegarder." );
         }
+        try {
         saveMetadata();
+        }catch(Exception e) {
+        	throw new DiskManagerException("Erreur lors de la sauvegarde des métadonnées : " + e.getMessage());
+        }
     }
 	
     /**
@@ -239,7 +249,10 @@ public class DiskManager implements IDiskManager {
         if (isInitialized == false) {
             throw new DiskManagerException("Le DiskManager n'est pas initialisé. Appelez Init() en premier.");
         }
-
+        
+        if (ipid == null) {
+            throw new DiskManagerException("L'identifiant de page ne peut pas être null.");
+        }
         int pageIndex = ((PageId) ipid).getIndex();
 
         if (pageIndex < 0) {
@@ -257,6 +270,11 @@ public class DiskManager implements IDiskManager {
                     "La page " + pageIndex + " est actuellement désallouée et ne peut pas être manipulée.");
         }
 
+        if (buffer == null || buffer.capacity() != pageSize) {
+            throw new DiskManagerException("Le buffer doit avoir une capacité exactement égale à "+ pageSize + " octets.");
+        }
+
+
         File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
 
         try (RandomAccessFile raf = new RandomAccessFile(dataFile, "r")) {
@@ -267,15 +285,16 @@ public class DiskManager implements IDiskManager {
             buffer.put(data);
         } catch (FileNotFoundException e) {
             throw new DiskManagerException(
-                    "Fichier introuvable ou accès en lecture refusé lors de la lecture de la page "
-                            + pageIndex,
-                    e);
+                    "Fichier introuvable ou accès en lecture refusé lors de la lecture de la page "+ pageIndex,e);
         } catch (EOFException e) {
             throw new DiskManagerException(
                     "La page " + pageIndex + " n'a pas pu être lue en entier", e);
         } catch (IOException e) {
             throw new DiskManagerException(
                     "Erreur matérielle de lecture de la page " + pageIndex + " : " + e, e);
+        }catch (Exception e) {
+            throw new DiskManagerException(
+                    "Erreur lors de la lecture de la page ", e);
         }
     }
 
@@ -291,6 +310,9 @@ public class DiskManager implements IDiskManager {
     public void WritePage(IPageId ipid, ByteBuffer buffer) throws DiskManagerException {
         if (isInitialized == false) {
             throw new DiskManagerException("Le DiskManager n'est pas initialisé. Appelez Init() en premier.");
+        }
+        if (ipid == null) {
+            throw new DiskManagerException("L'identifiant de page ne peut pas être null.");
         }
 
         int pageIndex = ((PageId) ipid).getIndex();
@@ -308,21 +330,34 @@ public class DiskManager implements IDiskManager {
             throw new DiskManagerException(
                     "La page " + pageIndex + " a déjà été désallouée");
         }
+        
+
+        if (buffer == null || buffer.capacity() != pageSize) {
+            throw new DiskManagerException("Le buffer doit avoir une capacité exactement égale à "+ pageSize + " octets.");
+        }
+		
 
         File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
 
-        try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
-            raf.seek((long) pageIndex * pageSize);
-            buffer.rewind();
-            byte[] data = new byte[pageSize];
-            buffer.get(data);
-            raf.write(data);
-        } catch (FileNotFoundException e) {
+    	try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
+    	    raf.seek((long) pageIndex * pageSize);
+
+    	    byte[] data = new byte[pageSize];
+
+    	    buffer.clear();
+    	    buffer.get(data);
+
+    	    raf.write(data);
+    	}
+        catch (FileNotFoundException e) {
             throw new DiskManagerException(
                     "Fichier introuvable ou accès en écriture refusé pour la page " + pageIndex, e);
         } catch (IOException e) {
             throw new DiskManagerException(
                     "Erreur matérielle lors de l'écriture de la page " + pageIndex + " sur le disque dur.", e);
+        }catch (Exception e) {
+            throw new DiskManagerException(
+                    "Erreur lors de l'écriture de la page ", e);
         }
     }
 	/**
