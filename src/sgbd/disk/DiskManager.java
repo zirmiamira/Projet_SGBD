@@ -164,13 +164,14 @@ public class DiskManager implements IDiskManager {
     /**
      * save metadata
      */
-    private void saveMetadata() throws DiskManagerException {
+	   private void saveMetadata() throws DiskManagerException {
         if (nbrPage < 0) {
-            throw new DiskManagerException( "Le nombre de pages ne peut pas être négatif.");
+            throw new DiskManagerException("Le nombre de pages ne peut pas être négatif.");
         }
         if (pageSize <= 0) {
-            throw new DiskManagerException("La taille d'une page doit être strictement positive." );
+            throw new DiskManagerException("La taille d'une page doit être strictement positive.");
         }
+
         int size = (2 + availablePages.size()) * Integer.BYTES;
         ByteBuffer buffer = ByteBuffer.allocate(size);
 
@@ -184,16 +185,19 @@ public class DiskManager implements IDiskManager {
             if (index < 0 || index >= nbrPage) {
                 throw new DiskManagerException("Identifiant de page invalide : " + index);
             }
-            buffer.putInt((int) p.getIndex());
+
+            buffer.putInt(index);
         }
 
         try (FileOutputStream out = new FileOutputStream(metaFile)) {
             out.write(buffer.array());
-        } catch (Exception e) {
-            throw new DiskManagerException("Erreur lors de l'écriture des métadonnées : " + e.getMessage());
+        } catch (FileNotFoundException e) {
+            throw new DiskManagerException("Fichier de métadonnées introuvable : " + metaFile, e);
+        } catch (IOException e) {
+            throw new DiskManagerException("Erreur lors de l'écriture des métadonnées.", e);
         }
     }
-	
+
     /**
      * Persists the current state and metadata of the disk manager
      * to the working directory.
@@ -202,67 +206,107 @@ public class DiskManager implements IDiskManager {
      */
     public void Save() throws DiskManagerException {
         if (!isInitialized) {
-            throw new DiskManagerException( "Le DiskManager doit être initialisé avant de sauvegarder." );
+            throw new DiskManagerException("Le DiskManager doit être initialisé avant de sauvegarder.");
         }
-        try {
+
         saveMetadata();
-        }catch(Exception e) {
-        	throw new DiskManagerException("Erreur lors de la sauvegarde des métadonnées : " + e.getMessage());
-        }
+
     }
-	
+
     /**
      * Allocates a new page requested by the upper layers of the DBMS.
+     * 
      * @return the {@link IPageId} identifying the newly allocated page.
      * @throws DiskManagerException
      */
-        /**
+    /**
      * Allocates a new page requested by the upper layers of the DBMS.
+     * 
      * @return the {@link IPageId} identifying the newly allocated page.
      * @throws DiskManagerException
      */
-		public IPageId AllocPage() throws DiskManagerException {
-		    if (!isInitialized) {
-		        throw new DiskManagerException(
-		            "Le DiskManager doit être initialisé."
-		        );
-		    }
-		
-		    IPageId ipid;
-		
-		    try {
-		        File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
-		        try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
-		            if (!availablePages.isEmpty()) {
-		                // Réutiliser une page déjà libérée
-		                ipid = availablePages.remove(0);
-		            } else {
-		                // Allouer une nouvelle page
-		                ipid = new PageId(nbrPage);
-		                nbrPage++;
-		            }
-		            // Réserver physiquement l'espace pour toutes les pages
-		            long requiredLength = (long) nbrPage * pageSize;
-		            if (raf.length() < requiredLength) {
-		                raf.setLength(requiredLength);
-		            }
-		        }
-		
-		        Save();
-		        return ipid;
-		
-		    } catch (IOException e) {
-		        throw new DiskManagerException(
-		            "Erreur lors de l'allocation de la page.", e
-		        );
-		    }
-		}
+
+    public IPageId AllocPage() throws DiskManagerException {
+        if (isInitialized == false) {
+            throw new DiskManagerException(
+                    "Le DiskManager doit être initialisé avant d'allouer une page.");
+        }
+
+        int ancienNbrPage = nbrPage;
+        List<IPageId> anciennesPagesLibres = new ArrayList<>(availablePages);
+        long ancienneTaille = -1;
+        IPageId ipid;
+        boolean estVide = availablePages.isEmpty();
+
+        File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
+
+        try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
+            ancienneTaille = raf.length();
+
+            if (estVide == false) {
+                ipid = availablePages.remove(0);
+            } else {
+                ipid = new PageId(nbrPage);
+                nbrPage++;
+            }
+
+            long tailleNecessaire = (long) nbrPage * pageSize;
+
+            if (raf.length() < tailleNecessaire) {
+                raf.setLength(tailleNecessaire);
+            }
+
+        } catch (IOException e) {
+            restaurerEtatAllocation(ancienNbrPage, anciennesPagesLibres, dataFile, ancienneTaille);
+            throw new DiskManagerException(
+                    "Erreur lors de l'accès au fichier de données pendant l'allocation.", e);
+        }
+
+        try {
+            Save();
+        } catch (DiskManagerException e) {
+            try {
+                restaurerEtatAllocation(ancienNbrPage, anciennesPagesLibres, dataFile, ancienneTaille);
+            } catch (DiskManagerException exception) {
+                throw new DiskManagerException(
+                        "La sauvegarde a échoué et l'état initial n'a pas pu être entièrement restauré.",
+                        exception);
+            }
+
+            throw new DiskManagerException(
+                    "La sauvegarde a échoué après l'allocation. L'état en mémoire et la taille de data.bin ont été restaurés.",
+                    e);
+        }
+
+        return ipid;
+    }
+
+    private void restaurerEtatAllocation(
+            int ancienNbrPage,
+            List<IPageId> anciennesPagesLibres,
+            File dataFile,
+            long ancienneTaille) throws DiskManagerException {
+
+        nbrPage = ancienNbrPage;
+        availablePages = new ArrayList<>(anciennesPagesLibres);
+
+        if (ancienneTaille >= 0) {
+            try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
+                raf.setLength(ancienneTaille);
+            } catch (IOException e) {
+                throw new DiskManagerException(
+                        "Impossible de restaurer la taille initiale du fichier data.bin.", e);
+            }
+        }
+    }
+
     /**
      * Reads the on-disk content of the page designated by {@code 
      }
      * into the provided buffer.
      * <p>
-     * Note: The caller is responsible for allocating and passing the destination buffer.
+     * Note: The caller is responsible for allocating and passing the destination
+     * buffer.
      *
      * @param ipid   the identifier of the page to read.
      * @param buffer the buffer into which data will be copied
@@ -273,7 +317,7 @@ public class DiskManager implements IDiskManager {
         if (isInitialized == false) {
             throw new DiskManagerException("Le DiskManager n'est pas initialisé. Appelez Init() en premier.");
         }
-        
+
         if (ipid == null) {
             throw new DiskManagerException("L'identifiant de page ne peut pas être null.");
         }
@@ -295,9 +339,9 @@ public class DiskManager implements IDiskManager {
         }
 
         if (buffer == null || buffer.capacity() != pageSize) {
-            throw new DiskManagerException("Le buffer doit avoir une capacité exactement égale à "+ pageSize + " octets.");
+            throw new DiskManagerException(
+                    "Le buffer doit avoir une capacité exactement égale à " + pageSize + " octets.");
         }
-
 
         File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
 
@@ -307,24 +351,23 @@ public class DiskManager implements IDiskManager {
             raf.readFully(data);
             buffer.clear();
             buffer.put(data);
+            buffer.rewind();
         } catch (FileNotFoundException e) {
             throw new DiskManagerException(
-                    "Fichier introuvable ou accès en lecture refusé lors de la lecture de la page "+ pageIndex,e);
+                    "Fichier introuvable ou accès en lecture refusé lors de la lecture de la page " + pageIndex, e);
         } catch (EOFException e) {
             throw new DiskManagerException(
                     "La page " + pageIndex + " n'a pas pu être lue en entier", e);
         } catch (IOException e) {
             throw new DiskManagerException(
                     "Erreur matérielle de lecture de la page " + pageIndex + " : " + e, e);
-        }catch (Exception e) {
-            throw new DiskManagerException(
-                    "Erreur lors de la lecture de la page ", e);
         }
     }
 
     @Override
-	/**
-     * Writes the content of the provided buffer into the page designated by {@code ipid}.
+    /**
+     * Writes the content of the provided buffer into the page designated by
+     * {@code ipid}.
      * This is the counterpart of {@link #ReadPage(IPageId, ByteBuffer)}.
      *
      * @param ipid   the identifier of the target page.
@@ -343,74 +386,78 @@ public class DiskManager implements IDiskManager {
 
         if (pageIndex < 0) {
             throw new DiskManagerException("L'ID de la page est négatif (" + pageIndex + ").");
-        }    
+        }
 
         if (pageIndex >= nbrPage) {
             throw new DiskManagerException(
                     "La page " + pageIndex + " n'a jamais été créée (limite actuelle : " + nbrPage + ").");
-        }    
+        }
 
         if (availablePages.contains(ipid)) {
             throw new DiskManagerException(
                     "La page " + pageIndex + " a déjà été désallouée");
         }
-        
 
         if (buffer == null || buffer.capacity() != pageSize) {
-            throw new DiskManagerException("Le buffer doit avoir une capacité exactement égale à "+ pageSize + " octets.");
+            throw new DiskManagerException(
+                    "Le buffer doit avoir une capacité exactement égale à " + pageSize + " octets.");
         }
-		
 
         File dataFile = new File(metaFile.getParentFile(), DATA_FILE_NAME);
 
-    	try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
-    	    raf.seek((long) pageIndex * pageSize);
+        try (RandomAccessFile raf = new RandomAccessFile(dataFile, "rw")) {
+            raf.seek((long) pageIndex * pageSize);
 
-    	    byte[] data = new byte[pageSize];
+            byte[] data = new byte[pageSize];
 
-    	    buffer.clear();
-    	    buffer.get(data);
+            // duplicate() éviter la modification du buffer reçu en paramètre
+            buffer.duplicate().clear().get(data);
 
-    	    raf.write(data);
-    	}
-        catch (FileNotFoundException e) {
+            raf.write(data);
+        } catch (FileNotFoundException e) {
             throw new DiskManagerException(
                     "Fichier introuvable ou accès en écriture refusé pour la page " + pageIndex, e);
         } catch (IOException e) {
             throw new DiskManagerException(
                     "Erreur matérielle lors de l'écriture de la page " + pageIndex + " sur le disque dur.", e);
-        }catch (Exception e) {
-            throw new DiskManagerException(
-                    "Erreur lors de l'écriture de la page ", e);
         }
     }
-	/**
+
+    /**
      * Deallocates the page identified by {@code ipid}, marking it as available
      * for future allocations.
      *
      * @param ipid the identifier of the page to free.
      * @throws DiskManagerException
      */
-    public void DeallocPage(IPageId ipid) throws DiskManagerException{
-		if (!isInitialized) {
-            throw new DiskManagerException( "Le DiskManager doit être initialisé.");
+    public void DeallocPage(IPageId ipid) throws DiskManagerException {
+        if (isInitialized == false) {
+            throw new DiskManagerException("Le DiskManager doit être initialisé avant de libérer une page.");
         }
         if (ipid == null) {
-            throw new DiskManagerException("l'ID de la page est null");
+            throw new DiskManagerException("L'identifiant de page ne peut pas être null.");
         }
 
         int pageNum = ((PageId) ipid).getIndex();
 
         if (pageNum < 0 || pageNum >= nbrPage) {
-            throw new DiskManagerException("la page " + pageNum + " n'existe pas");
+            throw new DiskManagerException("La page " + pageNum + " n'existe pas.");
         }
 
         if (availablePages.contains(ipid)) {
-            throw new DiskManagerException("la page " + pageNum + " est déjà libre ");
+            throw new DiskManagerException("La page " + pageNum + " est déjà libre.");
         }
 
-		availablePages.add(ipid);
-		Save();
+        availablePages.add(ipid);
+
+        try {
+            Save();
+        } catch (DiskManagerException e) {
+            availablePages.remove(ipid);
+            throw new DiskManagerException(
+                    "La sauvegarde a échoué après la libération de la page. L'état en mémoire a été restauré.",
+                    e);
+        }
     }
 
     /**
@@ -452,7 +499,7 @@ public class DiskManager implements IDiskManager {
                 dbFile.close();
             }
         } catch (IOException e) {
-            throw new DiskManagerException("Impossible de fermer le fichier de données lors de la réinitialisation.");
+            throw new DiskManagerException("Impossible de fermer le fichier de données lors de la réinitialisation.",e);
         } finally {
             dbFile = null;
             metaFile = null;
