@@ -1,3 +1,4 @@
+package sgbd.buffer;
 /**
  * Base checked exception for all DBMS-related errors.
  */
