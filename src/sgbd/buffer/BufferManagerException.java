@@ -1,3 +1,4 @@
+package sgbd.buffer;
 /**
  * Exception thrown when an error occurs within the BufferManager layer.
  */
