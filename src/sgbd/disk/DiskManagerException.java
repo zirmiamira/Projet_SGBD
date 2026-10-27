@@ -1,3 +1,4 @@
+package sgbd.disk;
 /**
  * Exception thrown when an error occurs within the DiskManager layer.
  */
