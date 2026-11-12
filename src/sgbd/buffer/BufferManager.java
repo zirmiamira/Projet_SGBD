@@ -1,7 +1,7 @@
 package sgbd.buffer;
 import java.nio.ByteBuffer;
 
-import sgbd.common1.DBMSException;
+import sgbd.common.DBMSException;
 import sgbd.disk.IDiskManager;
 import sgbd.disk.IPageId;
 
