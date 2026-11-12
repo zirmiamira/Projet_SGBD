@@ -1,74 +1,115 @@
 package sgbd.buffer;
+import java.nio.ByteBuffer;
 
-BufferManager{
+import sgbd.common1.DBMSException;
+import sgbd.disk.IDiskManager;
+import sgbd.disk.IPageId;
 
-    /**
-     * Initializes the buffer manager with the specified configurations and components.
-     *
-     * @param pageSize    The size of a page in bytes.
-     * @param bufferCount The number of buffer frames managed by the buffer manager.
-     * @param policy      The initial page replacement policy (e.g., LRU, MRU).
-     * @param diskManager The underlying disk manager instance used for disk I/O.
-     * @throws DBMSException
-     */
-    void init(
-            int pageSize,
-            int bufferCount,
-            ReplacementPolicy policy,
-            IDiskManager diskManager
-    ) throws DBMSException;
+public abstract class BufferManager implements IBufferManager {
 
-    /**
-     * Responds to a page request from upper layers.
-     * Retrieves the buffer containing the requested page.
-     *
-     * @param pageId The identifier of the requested page.
-     * @return The buffer containing the page data.
-     * @throws DBMSException
-     */
-    ByteBuffer getPage(IPageId pageId) throws DBMSException;
+    // Structure interne pour modéliser une case mémoire
+    private class Frame {
+        IPageId pageId = null;
+        int pinCount = 0;
+        boolean dirtyFlag = false;
+        ByteBuffer buffer;
 
-    /**
-     * Releases a previously requested page.
-     *
-     * @param pageId   The identifier of the page to free.
-     * @param valDirty Whether the page content has been modified.
-     * @throws DBMSException
-     */
-    void freePage(IPageId pageId, boolean valDirty) throws DBMSException;
+        public Frame(int pageSize) {
+            this.buffer = ByteBuffer.allocate(pageSize);
+        }
+    }
 
-    /**
-     * Updates the current replacement policy.
-     * Overrides the policy previously configured.
-     *
-     * @param policy The new replacement policy to use.
-     * @throws DBMSException
-     */
-    void setPolicy(ReplacementPolicy policy) throws DBMSException;
+    private int pageSize;
+    private int bufferCount;
+    private ReplacementPolicy policy;
+    private IDiskManager diskManager;
+    private Frame[] bufferPool;
 
-    /**
-     * Saves all modified pages (dirty == true/1) to disk via the DiskManager,
-     *
-     * @throws DBMSException
-     */
-    void saveBuffers() throws DBMSException;
+    
+    
+    @Override
+    public void init(int pageSize, int bufferCount, ReplacementPolicy policy, IDiskManager diskManager) throws DBMSException {
+        this.pageSize = pageSize;
+        this.bufferCount = bufferCount;
+        this.policy = policy;
+        this.diskManager = diskManager;
+        
+        this.bufferPool = new Frame[bufferCount];
+        for (int i = 0; i < bufferCount; i++) {
+            this.bufferPool[i] = new Frame(pageSize);
+        }
+    }
+    
+    
+    
 
-    /**
-     * Retrieves the current pin count of the specified page in the buffer pool.
-     *
-     * @param pageId The identifier of the page.
-     * @return The pin count of the page if the page is in the buffer pool
-     * @throws DBMSException
-     */
-    int getPinCount(IPageId pageId) throws DBMSException;
+    public ByteBuffer getPage(IPageId pageId) throws DBMSException {
+        
+        // Étape 1 : Vérifier si la page est déjà en RAM
+        for (Frame frame : bufferPool) {
+            if (frame.pageId != null && frame.pageId.equals(pageId)) {
+                frame.pinCount++;
+                return frame.buffer;
+            }
+        }
 
-    /**
-     * Retrieves the dirty status of the specified page in the buffer pool.
-     *
-     * @param pageId The identifier of the page.
-     * @return Rhe dirty flag of the page if the page is in the buffer pool 
-     * @throws DBMSException
-     */
-    boolean getDirtyFlag(IPageId pageId) throws DBMSException;
+        // Étape 2 : Trouver une case libre
+        Frame targetFrame = null;
+        for (Frame frame : bufferPool) {
+            if (frame.pinCount == 0) {
+                targetFrame = frame;
+                break; 
+            }
+        }
 
+        if (targetFrame == null) {
+            throw new BufferManagerException("Plus de place en mémoire, et politique de remplacement non implémentée.");
+        }
+
+        // Étape 3 : Gérer la sauvegarde (Dirty) de l'ancienne page
+        if (targetFrame.pageId != null && targetFrame.dirtyFlag) {
+            diskManager.WritePage(targetFrame.pageId, targetFrame.buffer);
+        }
+
+        // Étape 4 : Charger la nouvelle page
+        targetFrame.pageId = pageId;
+        targetFrame.pinCount = 1;
+        targetFrame.dirtyFlag = false;
+        
+        diskManager.ReadPage(pageId, targetFrame.buffer);
+        
+        return targetFrame.buffer;
+    }
+    
+    
+
+	@Override
+	public void freePage(IPageId pageId, boolean valDirty) throws DBMSException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void setPolicy(ReplacementPolicy policy) throws DBMSException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void saveBuffers() throws DBMSException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public int getPinCount(IPageId pageId) throws DBMSException {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public boolean getDirtyFlag(IPageId pageId) throws DBMSException {
+		// TODO Auto-generated method stub
+		return false;
+	}
 }
